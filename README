@@ -1,0 +1,11 @@
+log
+===
+
+Leveled execution logs for Go; minimal interface with fine grained control
+(file level, sub-package level, severity) for log evaluation.
+
+This is an amalgamation of ideas from multiple logger implementations, notably:
+  - google/glog
+  - go-kit/kit/log
+  - upspin/log
+  - cockroachdb/pkg/log
