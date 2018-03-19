@@ -19,7 +19,8 @@ Intended top-level usage:
     -log-to-stderr
           Log to standard error.
     -log-level (info|debug|warn|error|fatal)
-          Log level for logs emitted.
+          Log level for logs emitted (global, can be overrided using
+          -log-filter).
     -log-filter value
           Comma-separated list of pattern:N settings for file-filtered logging.
 

@@ -1,0 +1,272 @@
+Like glog, but [IEWF] interwined in same file. Allow for non-singleton loggers,
+stdout needs to be managed internally. Tags like go-kit. Allow for custom tag
+printing.
+Allow for using multiple levels (info,warn).
+
+Single logger, connected to single writer (could be synced), multiple modes.
+Modes can be disabled across loggers, individual logging can be disabled by
+file.
+
+API:
+
+  import (
+    "irfansharif.io/log"
+    "irfansharif.io/log/lopts"
+  )
+
+  // File-name, provide wrappers for sync writers.
+  logger := log.New(fname string, lopts.<>, ...)
+
+  // Should this be k/v pairs? Message part, tagged part?
+  logger.Info(...)
+  logger.Infof(...)
+
+  logger.Debug(...)
+  logger.Debugf(...)
+
+  logger.Warn(...)
+  logger.Warnf(...)
+
+  logger.Error(...)
+  logger.Errorf(...)
+
+  logger.Fatal(...)
+  logger.Fatalf(...)
+
+  upspin:
+    var (
+        Debug = &logger{DebugLevel}
+        Info  = &logger{InfoLevel}
+        Error = &logger{ErrorLevel}
+    )
+    func At(level string) bool
+    func Fatal(v ...interface{})
+    func Fatalf(format string, v ...interface{})
+    func Flush()
+    func GetLevel() string
+    func Print(v ...interface{})
+    func Printf(format string, v ...interface{})
+    func Println(v ...interface{})
+    func Register(e ExternalLogger)
+    func SetLevel(level string) error
+    func SetOutput(w io.Writer)
+    type ExternalLogger
+    type Level
+        const (
+            DebugLevel Level = iota
+            InfoLevel
+            ErrorLevel
+            DisabledLevel
+        )
+    type Logger
+        type Logger interface {
+            // Printf writes a formated message to the log.
+            Printf(format string, v ...interface{})
+
+            // Print writes a message to the log.
+            Print(v ...interface{})
+
+            // Println writes a line to the log.
+            Println(v ...interface{})
+
+            // Fatal writes a message to the log and aborts.
+            Fatal(v ...interface{})
+
+            // Fatalf writes a formated message to the log and aborts.
+            Fatalf(format string, v ...interface{})
+        }
+
+  go-kit:
+    func NewStdlibAdapter(logger Logger, options ...StdlibAdapterOption) io.Writer
+    func NewSyncWriter(w io.Writer) io.Writer
+    type Logger
+        func NewJSONLogger(w io.Writer) Logger
+        func NewLogfmtLogger(w io.Writer) Logger
+        func NewNopLogger() Logger
+        func NewSyncLogger(logger Logger) Logger
+        func With(logger Logger, keyvals ...interface{}) Logger
+        func WithPrefix(logger Logger, keyvals ...interface{}) Logger
+    type LoggerFunc
+        func (f LoggerFunc) Log(keyvals ...interface{}) error
+    type StdlibAdapter
+        func (a StdlibAdapter) Write(p []byte) (int, error)
+    type StdlibAdapterOption
+        func FileKey(key string) StdlibAdapterOption
+        func MessageKey(key string) StdlibAdapterOption
+        func TimestampKey(key string) StdlibAdapterOption
+    type StdlibWriter
+        func (w StdlibWriter) Write(p []byte) (int, error)
+    type SwapLogger
+        func (l *SwapLogger) Log(keyvals ...interface{}) error
+        func (l *SwapLogger) Swap(logger Logger)
+    type Valuer
+        func Caller(depth int) Valuer
+        func Timestamp(t func() time.Time) Valuer
+        func TimestampFormat(t func() time.Time, layout string) Valuer
+
+
+  glog:
+    func CopyStandardLogTo(name string)
+    func Error(args ...interface{})
+    func ErrorDepth(depth int, args ...interface{})
+    func Errorf(format string, args ...interface{})
+    func Errorln(args ...interface{})
+    func Exit(args ...interface{})
+    func ExitDepth(depth int, args ...interface{})
+    func Exitf(format string, args ...interface{})
+    func Exitln(args ...interface{})
+    func Fatal(args ...interface{})
+    func FatalDepth(depth int, args ...interface{})
+    func Fatalf(format string, args ...interface{})
+    func Fatalln(args ...interface{})
+    func Flush()
+    func Info(args ...interface{})
+    func InfoDepth(depth int, args ...interface{})
+    func Infof(format string, args ...interface{})
+    func Infoln(args ...interface{})
+    func Warning(args ...interface{})
+    func WarningDepth(depth int, args ...interface{})
+    func Warningf(format string, args ...interface{})
+    func Warningln(args ...interface{})
+    type Level
+        func (l *Level) Get() interface{}
+        func (l *Level) Set(value string) error
+        func (l *Level) String() string
+    type OutputStats
+        func (s *OutputStats) Bytes() int64
+        func (s *OutputStats) Lines() int64
+    type Verbose
+        func V(level Level) Verbose
+        func (v Verbose) Info(args ...interface{})
+        func (v Verbose) Infof(format string, args ...interface{})
+        func (v Verbose) Infoln(args ...interface{})
+
+  crdb:
+    Variables
+    func DirSet() bool
+    func DisableTracebacks() func()
+    func Error(ctx context.Context, args ...interface{})
+    func Errorf(ctx context.Context, format string, args ...interface{})
+    func ErrorfDepth(ctx context.Context, depth int, format string, args ...interface{})
+    func Event(ctx context.Context, msg string)
+    func Eventf(ctx context.Context, format string, args ...interface{})
+    func ExpensiveLogEnabled(ctx context.Context, level int32) bool
+    func Fatal(ctx context.Context, args ...interface{})
+    func FatalChan() <-chan struct{}
+    func FatalOnPanic()
+    func Fatalf(ctx context.Context, format string, args ...interface{})
+    func FatalfDepth(ctx context.Context, depth int, format string, args ...interface{})
+    func FinishEventLog(ctx context.Context)
+    func Flush()
+    func GetLogReader(filename string, restricted bool) (io.ReadCloser, error)
+    func HasSpanOrEvent(ctx context.Context) bool
+    func Info(ctx context.Context, args ...interface{})
+    func Infof(ctx context.Context, format string, args ...interface{})
+    func InfofDepth(ctx context.Context, depth int, format string, args ...interface{})
+    func Intercept(ctx context.Context, f InterceptorFn)
+    func LoggingToStderr(s Severity) bool
+    func MakeMessage(ctx context.Context, format string, args []interface{}) string
+    func NewStdLogger(severity Severity) *stdLog.Logger
+    func RecoverAndReportPanic(ctx context.Context, sv *settings.Values)
+    func Redact(r interface{}) string
+    func ReportOrPanic( ctx context.Context, sv *settings.Values, format string, reportables []interface{}, )
+    func ReportPanic(ctx context.Context, sv *settings.Values, r interface{}, depth int)
+    func ReportablesToSafeError(depth int, format string, reportables []interface{}) error
+    func SendCrashReport( ctx context.Context, sv *settings.Values, depth int, format string, reportables []interface{}, )
+    func SetExitFunc(f func(int))
+    func SetSync(sync bool)
+    func SetVModule(value string) error
+    func SetupCrashReporter(ctx context.Context, cmd string)
+    func Shout(ctx context.Context, sev Severity, args ...interface{})
+    func StartGCDaemon()
+    func V(level int32) bool
+    func VDepth(l int32, depth int) bool
+    func VErrEvent(ctx context.Context, level int32, msg string)
+    func VErrEventf(ctx context.Context, level int32, format string, args ...interface{})
+    func VErrEventfDepth( ctx context.Context, depth int, level int32, format string, args ...interface{}, )
+    func VEvent(ctx context.Context, level int32, msg string)
+    func VEventf(ctx context.Context, level int32, format string, args ...interface{})
+    func VEventfDepth(ctx context.Context, depth int, level int32, format string, args ...interface{})
+    func Warning(ctx context.Context, args ...interface{})
+    func Warningf(ctx context.Context, format string, args ...interface{})
+    func WarningfDepth(ctx context.Context, depth int, format string, args ...interface{})
+    func WithEventLog(ctx context.Context, family, title string) context.Context
+    func WithLogTag(ctx context.Context, name string, value interface{}) context.Context
+    func WithLogTagInt(ctx context.Context, name string, value int) context.Context
+    func WithLogTagInt64(ctx context.Context, name string, value int64) context.Context
+    func WithLogTagStr(ctx context.Context, name string, value string) context.Context
+    func WithNoEventLog(ctx context.Context) context.Context
+    type AmbientContext
+        func (ac *AmbientContext) AddLogTag(name string, value interface{})
+        func (ac *AmbientContext) AddLogTagInt(name string, value int)
+        func (ac *AmbientContext) AddLogTagInt64(name string, value int64)
+        func (ac *AmbientContext) AddLogTagStr(name string, value string)
+        func (ac *AmbientContext) AnnotateCtx(ctx context.Context) context.Context
+        func (ac *AmbientContext) AnnotateCtxWithSpan( ctx context.Context, opName string, ) (context.Context, opentracing.Span)
+        func (ac *AmbientContext) FinishEventLog()
+        func (ac *AmbientContext) ResetAndAnnotateCtx(ctx context.Context) context.Context
+        func (ac *AmbientContext) SetEventLog(family, title string)
+    type DirName
+        func (l *DirName) IsSet() bool
+        func (l *DirName) Set(dir string) error
+        func (l *DirName) String() string
+        func (l *DirName) Type() string
+    type Entry
+        func FetchEntriesFromFiles( startTimestamp, endTimestamp int64, maxEntries int, pattern *regexp.Regexp, ) ([]Entry, error)
+        func MakeEntry(s Severity, t int64, file string, line int, msg string) Entry
+        func (*Entry) Descriptor() ([]byte, []int)
+        func (e Entry) Format(w io.Writer) error
+        func (m *Entry) Marshal() (dAtA []byte, err error)
+        func (m *Entry) MarshalTo(dAtA []byte) (int, error)
+        func (*Entry) ProtoMessage()
+        func (m *Entry) Reset()
+        func (m *Entry) Size() (n int)
+        func (m *Entry) String() string
+        func (m *Entry) Unmarshal(dAtA []byte) error
+    type EntryDecoder
+        func NewEntryDecoder(in io.Reader) *EntryDecoder
+        func (d *EntryDecoder) Decode(entry *Entry) error
+    type EveryN
+        func Every(n time.Duration) EveryN
+        func (e *EveryN) ShouldLog() bool
+    type FileDetails
+        func (*FileDetails) Descriptor() ([]byte, []int)
+        func (m *FileDetails) Marshal() (dAtA []byte, err error)
+        func (m *FileDetails) MarshalTo(dAtA []byte) (int, error)
+        func (*FileDetails) ProtoMessage()
+        func (m *FileDetails) Reset()
+        func (m *FileDetails) Size() (n int)
+        func (m *FileDetails) String() string
+        func (m *FileDetails) Unmarshal(dAtA []byte) error
+    type FileInfo
+        func ListLogFiles() ([]FileInfo, error)
+        func (*FileInfo) Descriptor() ([]byte, []int)
+        func (m *FileInfo) Marshal() (dAtA []byte, err error)
+        func (m *FileInfo) MarshalTo(dAtA []byte) (int, error)
+        func (*FileInfo) ProtoMessage()
+        func (m *FileInfo) Reset()
+        func (m *FileInfo) Size() (n int)
+        func (m *FileInfo) String() string
+        func (m *FileInfo) Unmarshal(dAtA []byte) error
+    type InterceptorFn
+    type SafeMessager
+    type SafeType
+        func Safe(v interface{}) SafeType
+        func (st SafeType) Cause() interface{}
+        func (st SafeType) Error() string
+        func (st SafeType) SafeMessage() string
+        func (st SafeType) String() string
+        func (st SafeType) WithCause(cause interface{}) SafeType
+    type SecondaryLogger
+        func NewSecondaryLogger(dirName *DirName, fileNamePrefix string, enableGc, forceSyncWrites bool) *SecondaryLogger
+        func (l *SecondaryLogger) Logf(ctx context.Context, format string, args ...interface{})
+    type Severity
+        func SeverityByName(s string) (Severity, bool)
+        func (Severity) EnumDescriptor() ([]byte, []int)
+        func (s *Severity) Name() string
+        func (s *Severity) Set(value string) error
+        func (x Severity) String() string
+    type TestLogScope
+        func Scope(t tShim) *TestLogScope
+        func ScopeWithoutShowLogs(t tShim) *TestLogScope
+        func (l *TestLogScope) Close(t tShim)
