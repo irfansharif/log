@@ -15,56 +15,14 @@
 package log
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"runtime"
+	"runtime/debug"
 	"strings"
 )
 
-// Rename "mode" as you can have multiple. Need something like mode, span.
-type mode int
-
-const (
-	InfoMode mode = 1 << iota
-	WarnMode
-	ErrorMode
-	FatalMode
-	DebugMode
-
-	// TODO(irfansharif): Is there a way to not check for this explicitly every
-	// time? Somehow embed this in the representation?
-	DisabledMode = 0
-	DefaultMode  = InfoMode | WarnMode | ErrorMode | FatalMode
-)
-
-func (m mode) String() string {
-	var buffer bytes.Buffer
-	switch m {
-	case InfoMode:
-		buffer.WriteString("I")
-		fallthrough
-	case WarnMode:
-		buffer.WriteString("W")
-		fallthrough
-	case ErrorMode:
-		buffer.WriteString("E")
-		fallthrough
-	case FatalMode:
-		buffer.WriteString("F")
-		fallthrough
-	case DebugMode:
-		buffer.WriteString("D")
-		fallthrough
-	case DisabledMode:
-		buffer.WriteString("X")
-		fallthrough
-	default:
-		panic("Unidentified mode")
-	}
-	return buffer.String()
-}
-
+// Logger. TODO(irfansharif): Comment.
 type Logger struct {
 	w io.Writer
 }
@@ -72,101 +30,115 @@ type Logger struct {
 // TODO(irfansharif): Wrap configurations in variadic options.
 // TODO(irfansharif): Make a rotated log, dir io.Writer.
 func New(w io.Writer) *Logger {
-	l := &Logger{
+	return &Logger{
 		w: w,
 	}
-	return l
 }
 
-// getcaller returns the file and line number of where the caller's caller's
+func (l *Logger) Info(v ...interface{}) {
+	l.log(InfoMode, fmt.Sprintf("%v", v...))
+}
+
+func (l *Logger) Infof(format string, v ...interface{}) {
+	l.log(InfoMode, fmt.Sprintf(format, v...))
+}
+
+func (l *Logger) Warn(v ...interface{}) {
+	l.log(WarnMode, fmt.Sprintf("%v", v...))
+}
+
+func (l *Logger) Warnf(format string, v ...interface{}) {
+	l.log(WarnMode, fmt.Sprintf(format, v...))
+}
+
+func (l *Logger) Error(v ...interface{}) {
+	l.log(ErrorMode, fmt.Sprintf("%v", v...))
+}
+
+func (l *Logger) Errorf(format string, v ...interface{}) {
+	l.log(ErrorMode, fmt.Sprintf(format, v...))
+}
+
+func (l *Logger) Fatal(v ...interface{}) {
+	l.log(FatalMode, fmt.Sprintf("%v", v...))
+}
+
+func (l *Logger) Fatalf(format string, v ...interface{}) {
+	l.log(FatalMode, fmt.Sprintf(format, v...))
+}
+
+func (l *Logger) Debug(v ...interface{}) {
+	l.log(DebugMode, fmt.Sprintf("%v", v...))
+}
+
+func (l *Logger) Debugf(format string, v ...interface{}) {
+	l.log(DebugMode, fmt.Sprintf(format, v...))
+}
+
+// TODO(irfansharif): Document that backtrace may be emitted despite not being
+// in the right mode.
+func (l *Logger) log(lmode mode, data string) {
+	// Logger.log is called from Logger.{Info,Warn,Error,Fatal,Debug}{,f}. We
+	// use a depth of two to retrieve the caller immediately preceding it.
+	file, line := caller(2)
+	tp := fmt.Sprintf("%s:%d", file, line)
+
+	gmode := GetGlobalLogMode()
+	fmode, ok := GetFileLogMode(file)
+	shouldLog := (gmode&lmode) != DisabledMode || (ok && (fmode&lmode) != DisabledMode)
+	if shouldLog {
+		l.w.Write([]byte(fmt.Sprintf("%s %s: %s\n", lmode.String(), tp, data)))
+	}
+
+	tpenabled := CheckTracePoint(tp)
+	if tpenabled {
+		l.w.Write(stacktrace())
+	}
+}
+
+// stacktrace returns the stack trace for the current goroutine.
+func stacktrace() []byte {
+	return debug.Stack()
+}
+
+// caller returns the file and line number of where the caller's caller's
 // call site.
+//
+// e.go: 32 func e() {
+// e.go: 33     f()
+// e.go: 34 }
 //
 // f.go: 11 func f() {
 // f.go: 12      g()
 // f.go: 13 }
 //
+// g.go: 25 func g() {
+// g.go: 26 	{
+// g.go: 27         // Request caller one level above.
+// g.go: 28 		file, line := caller(1)
+// g.go: 29 		fmt.Println(fmt.Sprintf("%s: %d", file, line)) // f.go: 12
+// g.go: 30 	}
+// g.go: 31 	{
+// g.go: 32         // Request caller two levels above.
+// g.go: 33 		file, line := caller(2)
+// g.go: 34 		fmt.Println(fmt.Sprintf("%s: %d", file, line)) // e.go: 33
+// g.go: 35 	}
+// g.go: 36 }
 //
-// g.go: 27 func g() {
-// g.go: 28      file, line := getcaller()
-// g.go: 29      fmt.Println(fmt.Sprintf("%s: %d", file, line)) // f.go: 12
-// g.go: 29 }
-//
-func getcaller() (file string, line int) {
-	_, file, line, ok := runtime.Caller(2)
+func caller(depth int) (file string, line int) {
+	_, file, line, ok := runtime.Caller(depth + 1) // +1 to account for call to caller itself.
 	if !ok {
 		file = "[???]"
 		line = -1
 	} else {
+		// TODO(irfansharif): Right now this isn't robust to shared filenames
+		// across varied sub packages. This is a stand-in to allow for direct
+		// file name specification without fully-specified paths (in the host
+		// machine or relative to project root).
 		slash := strings.LastIndex(file, "/")
 		if slash >= 0 {
 			file = file[slash+1:]
 		}
 	}
 	return file, line
-}
-
-func (l *Logger) Info(v ...interface{}) {
-	file, line := getcaller()
-	pc := fmt.Sprintf("%s:%d", file, line)
-
-	gmode := getLogMode()
-	if (gmode & InfoMode) != 0 {
-		for i := 0; i < len(v); i++ {
-			switch t := v[i].(type) {
-			case string:
-				l.w.Write([]byte(fmt.Sprintf("%s: %s", pc, t)))
-			}
-		}
-		return
-	}
-
-	lmode, ok := getPCMode(pc)
-	if !ok {
-		return
-	}
-	if (lmode & InfoMode) != 0 {
-		for i := 0; i < len(v); i++ {
-			switch t := v[i].(type) {
-			case string:
-				l.w.Write([]byte(fmt.Sprintf("%s: %s", pc, t)))
-			}
-		}
-		return
-	}
-}
-
-func (l *Logger) Infof(format string, v ...interface{}) {
-	panic("unimplemented")
-}
-
-func (l *Logger) Warn(v ...interface{}) {
-	panic("unimplemented")
-}
-
-func (l *Logger) Warnf(format string, v ...interface{}) {
-	panic("unimplemented")
-}
-
-func (l *Logger) Error(v ...interface{}) {
-	panic("unimplemented")
-}
-
-func (l *Logger) Errorf(format string, v ...interface{}) {
-	panic("unimplemented")
-}
-
-func (l *Logger) Fatal(v ...interface{}) {
-	panic("unimplemented")
-}
-
-func (l *Logger) Fatalf(format string, v ...interface{}) {
-	panic("unimplemented")
-}
-
-func (l *Logger) Debug(v ...interface{}) {
-	panic("unimplemented")
-}
-
-func (l *Logger) Debugf(format string, v ...interface{}) {
-	panic("unimplemented")
 }

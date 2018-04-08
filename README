@@ -22,12 +22,16 @@ Intended top-level usage:
           Log level for logs emitted (global, can be overrided using
           -log-filter).
     -log-filter value
-          Comma-separated list of pattern:N settings for file-filtered logging.
+          Comma-separated list of pattern:level settings for file-filtered logging.
+    -log-backtrace-at value
+          Comma-separated list of filename:N settings, when any logging statement at
+          the specified locations are executed, a stack trace will be emitted.
 
   $ <binary-name> -log-level info \
                   -log-dir /path/to/dir \
                   -log-to-stderr \
                   -log-filter f.go:warn,g/h/*.go:debug
+                  -log-backtrace-at y.go:42
 
 The flags (or some variation thereof) will have to be provided/registered by
 the library user, this library simply provides the hooks the user can then use
@@ -53,8 +57,12 @@ helper binary:
     -log-filter value
           Comma-separated list of pattern:N settings for file-filtered logging
           to configure server to apply.
+    -log-backtrace-at value
+          Comma-separated list of filename:N settings, when any logging statement at
+          the specified locations are executed, a stack trace will be emitted.
 
   $ <binary-name>-debugger -addr <host>:<port> \
                            -log-level debug \
                            -log-dir /path/to/another/dir \
                            -log-filter x.go:debug
+                           -log-backtrace-at y.go:42

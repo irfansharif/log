@@ -1,21 +1,22 @@
 Like glog, but [IEWF] interwined in same file. Allow for non-singleton loggers,
 stdout needs to be managed internally. Tags like go-kit. Allow for custom tag
 printing.
-Allow for using multiple levels (info,warn).
+Allow for using multiple levels (info,warn,debug). Suppress
+(warn|error|debug|info) (not fatal).
 
 Single logger, connected to single writer (could be synced), multiple modes.
 Modes can be disabled across loggers, individual logging can be disabled by
-file.
+file. Loggers can be set to emit backtrace at specific log points.
 
 API:
 
   import (
     "irfansharif.io/log"
-    "irfansharif.io/log/lopts"
   )
 
-  // File-name, provide wrappers for sync writers.
-  logger := log.New(fname string, lopts.<>, ...)
+  // io.Writer, provide wrappers for sync writers around specific files, directories.
+  // What does Flush() look like for files?
+  logger := log.New(w io.Writer, options...)
 
   // Should this be k/v pairs? Message part, tagged part?
   logger.Info(...)

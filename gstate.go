@@ -19,53 +19,90 @@ import (
 	"sync/atomic"
 )
 
-type pcModeMap map[string]mode // Map from program counter fname.go:linenumber to mode.
+// Map from program counter fname.go:linenumber to mode.
+type tracePointMap map[string]struct{}
+type fileModeMap map[string]mode
 type gstateT struct {
-	cmode    atomic.Value
-	pcModeMu struct {
+	gmode        atomic.Value
+	tracePointMu struct {
 		sync.Mutex
-		m atomic.Value
+		m atomic.Value // type: tracePointMap
+	}
+	fileModeMu struct {
+		sync.Mutex
+		m atomic.Value // type: fileModeMap
 	}
 }
 
 var gstate gstateT
 
-// Need to initialize the atomics; to be used once during init time and for
-// tests.
+// Need to initialize the atomics; to be used once during init time and for tests.
 func resetgstate() {
-	gstate.cmode.Store(DefaultMode)
-	gstate.pcModeMu.m.Store(make(pcModeMap))
+	gstate.gmode.Store(DefaultMode)
+	gstate.tracePointMu.m.Store(make(tracePointMap))
+	gstate.fileModeMu.m.Store(make(fileModeMap))
 }
 
 func init() {
 	resetgstate()
 }
 
-func SetLogMode(m mode) {
-	gstate.cmode.Store(m)
+// SetGlobalLogMode sets the global log mode to the one specified. Logging
+// outside what's included in the mode is thereby suppressed.
+func SetGlobalLogMode(m mode) {
+	gstate.gmode.Store(m)
 }
 
-func getLogMode() mode {
-	return gstate.cmode.Load().(mode)
+// GetGlobalLogMode gets the currently set global log mode.
+func GetGlobalLogMode() mode {
+	return gstate.gmode.Load().(mode)
 }
 
-func setPCMode(pc string, m mode) {
-	gstate.pcModeMu.Lock()                     // Synchronize with other potential writers.
-	ma := gstate.pcModeMu.m.Load().(pcModeMap) // Load current value of the map.
-	mb := make(pcModeMap)                      // Create a new map.
-	for pc, m := range ma {
-		mb[pc] = m // Copy all data from the current object to the new one.
+// EnableTracePoint enables the provided tracepoint. A tracepoint is of the form
+// filename.go:line-number (compiles to [\w]+.go:[\d]+) corresponding to the position of a logging
+// statement that once enabled, emits a backtrace when the logging statement is executed.
+func EnableTracePoint(tp string) {
+	gstate.tracePointMu.Lock()                         // Synchronize with other potential writers.
+	ma := gstate.tracePointMu.m.Load().(tracePointMap) // Load current value of the map.
+	mb := make(tracePointMap)                          // Create a new map.
+	for tp := range ma {
+		mb[tp] = struct{}{} // Copy all data from the current object to the new one.
 	}
-	mb[pc] = m                  // Do the update that we need.
-	gstate.pcModeMu.m.Store(mb) // Atomically replace the current object with the new one.
+	mb[tp] = struct{}{}             // Do the update that we need.
+	gstate.tracePointMu.m.Store(mb) // Atomically replace the current object with the new one.
 	// At this point all new readers start working with the new version.
 	// The old version will be garbage collected once the existing readers
 	// (if any) are done with it.
-	gstate.pcModeMu.Unlock()
+	gstate.tracePointMu.Unlock()
 }
 
-func getPCMode(pc string) (mode, bool) {
-	pcmap := gstate.pcModeMu.m.Load().(pcModeMap)
-	m, ok := pcmap[pc]
+// CheckTracePoint checks if the corresponding tracepoint is enabled.
+func CheckTracePoint(tp string) (tpenabled bool) {
+	tpmap := gstate.tracePointMu.m.Load().(tracePointMap)
+	_, ok := tpmap[tp]
+	return ok
+}
+
+// SetFileLogMode sets the log mode for the provided filename. Subsequent
+// logging statements within the file get filtered accordingly.
+func SetFileLogMode(fname string, m mode) {
+	gstate.fileModeMu.Lock()                       // Synchronize with other potential writers.
+	ma := gstate.fileModeMu.m.Load().(fileModeMap) // Load current value of the map.
+	mb := make(fileModeMap)                        // Create a new map.
+	for fname, m := range ma {
+		mb[fname] = m // Copy all data from the current object to the new one.
+	}
+	mb[fname] = m                 // Do the update that we need.
+	gstate.fileModeMu.m.Store(mb) // Atomically replace the current object with the new one.
+	// At this point all new readers start working with the new version.
+	// The old version will be garbage collected once the existing readers
+	// (if any) are done with it.
+	gstate.fileModeMu.Unlock()
+}
+
+// GetFileLogMode gets the log mode for the specified file.
+func GetFileLogMode(fname string) (m mode, ok bool) {
+	fmmap := gstate.fileModeMu.m.Load().(fileModeMap)
+	m, ok = fmmap[fname]
 	return m, ok
 }
