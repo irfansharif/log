@@ -167,8 +167,3 @@ func TestEnableTracePoint(t *testing.T) {
 		}
 	}
 }
-
-func TestX(t *testing.T) {
-	fmt.Println("hi", "hello")
-	fmt.Print(fmt.Sprintln("hi", "hello"))
-}

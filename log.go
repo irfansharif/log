@@ -23,6 +23,7 @@ import (
 	"strings"
 )
 
+// TODO(irfansharif): Provide a catchall global logger with warning?
 // TODO(irfansharif): Allow for logging flags, configuring output.
 // TODO(irfansharif): Allow for tags.
 // TODO(irfansharif): Allow for custom leveling (verbosity, should work at the

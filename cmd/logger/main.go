@@ -36,7 +36,7 @@ func main() {
 	}
 	flag.StringVar(&logDirFlag, "log-dir", "",
 		"Write log files in this directory.")
-	flag.BoolVar(&logToStderrFlag, "log-to-stderr", true,
+	flag.BoolVar(&logToStderrFlag, "log-to-stderr", false,
 		"Log to standard error.")
 	flag.Var(&logModeFlag, "log-mode",
 		"Log mode for logs emitted globally (can be overrode using -log-filter)")
@@ -57,9 +57,14 @@ func main() {
 	}
 
 	var writer io.Writer
-	writer = log.RotatingDirectoryLogger(logDirFlag)
-	writer = log.SynchronizedWriter(writer)
-	writer = log.MultiWriter(writer, os.Stderr)
+	// writer = ioutil.Discard
+	// writer = log.SynchronizedWriter(writer)
+	if logDirFlag != "" {
+		writer = log.RotatingDirectoryLogger(logDirFlag)
+	}
+	if logToStderrFlag {
+		writer = log.MultiWriter(writer, os.Stderr)
+	}
 
 	logger := log.New(writer)
 	logger.Info("log-dir:", logDirFlag)
