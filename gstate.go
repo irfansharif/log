@@ -21,7 +21,7 @@ import (
 
 // Map from program counter fname.go:linenumber to mode.
 type tracePointMap map[string]struct{}
-type fileModeMap map[string]mode
+type fileModeMap map[string]Mode
 type gstateT struct {
 	gmode        atomic.Value
 	tracePointMu struct {
@@ -49,13 +49,13 @@ func init() {
 
 // SetGlobalLogMode sets the global log mode to the one specified. Logging
 // outside what's included in the mode is thereby suppressed.
-func SetGlobalLogMode(m mode) {
+func SetGlobalLogMode(m Mode) {
 	gstate.gmode.Store(m)
 }
 
 // GetGlobalLogMode gets the currently set global log mode.
-func GetGlobalLogMode() mode {
-	return gstate.gmode.Load().(mode)
+func GetGlobalLogMode() Mode {
+	return gstate.gmode.Load().(Mode)
 }
 
 // EnableTracePoint enables the provided tracepoint. A tracepoint is of the form
@@ -85,7 +85,7 @@ func CheckTracePoint(tp string) (tpenabled bool) {
 
 // SetFileLogMode sets the log mode for the provided filename. Subsequent
 // logging statements within the file get filtered accordingly.
-func SetFileLogMode(fname string, m mode) {
+func SetFileLogMode(fname string, m Mode) {
 	gstate.fileModeMu.Lock()                       // Synchronize with other potential writers.
 	ma := gstate.fileModeMu.m.Load().(fileModeMap) // Load current value of the map.
 	mb := make(fileModeMap)                        // Create a new map.
@@ -101,7 +101,7 @@ func SetFileLogMode(fname string, m mode) {
 }
 
 // GetFileLogMode gets the log mode for the specified file.
-func GetFileLogMode(fname string) (m mode, ok bool) {
+func GetFileLogMode(fname string) (m Mode, ok bool) {
 	fmmap := gstate.fileModeMu.m.Load().(fileModeMap)
 	m, ok = fmmap[fname]
 	return m, ok

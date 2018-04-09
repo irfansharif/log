@@ -18,9 +18,8 @@ Intended top-level usage:
           Write log files in this directory.
     -log-to-stderr
           Log to standard error.
-    -log-level (info|debug|warn|error|fatal)
-          Log level for logs emitted (global, can be overrided using
-          -log-filter).
+    -log-level (info|debug|warn|error)
+          Log level for logs emitted (global, can be overrode using -log-filter).
     -log-filter value
           Comma-separated list of pattern:level settings for file-filtered logging.
     -log-backtrace-at value
@@ -30,7 +29,7 @@ Intended top-level usage:
   $ <binary-name> -log-level info \
                   -log-dir /path/to/dir \
                   -log-to-stderr \
-                  -log-filter f.go:warn,g/h/*.go:debug
+                  -log-filter f.go:warn,g/h/*.go:debug \
                   -log-backtrace-at y.go:42
 
 The flags (or some variation thereof) will have to be provided/registered by
@@ -64,5 +63,5 @@ helper binary:
   $ <binary-name>-debugger -addr <host>:<port> \
                            -log-level debug \
                            -log-dir /path/to/another/dir \
-                           -log-filter x.go:debug
+                           -log-filter x.go:debug \
                            -log-backtrace-at y.go:42

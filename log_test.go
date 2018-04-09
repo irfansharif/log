@@ -40,7 +40,7 @@ func TestInfoLog(t *testing.T) {
 	logger := New(buffer)
 	{
 		logger.Info("info")
-		regex := "I [\\w]+.go:[\\d]+: info"
+		regex := "^I [\\w]+.go:[\\d]+: info"
 		match, err := regexp.Match(regex, buffer.Bytes())
 		if err != nil {
 			t.Error(err)
@@ -101,7 +101,7 @@ func TestDebugModeEnableDisable(t *testing.T) {
 	}
 	{
 		logger.Debug("debug")
-		regex := "D [\\w]+.go:[\\d]+: debug"
+		regex := "^D [\\w]+.go:[\\d]+: debug"
 		match, err := regexp.Match(regex, buffer.Bytes())
 		if err != nil {
 			t.Error(err)
@@ -137,17 +137,38 @@ func TestEnableTracePoint(t *testing.T) {
 		if buffer.Len() == 0 {
 			t.Error("Expected stack trace to be populated, found empty buffer instead")
 		}
+
 		line, err := buffer.ReadString(byte('\n'))
 		if err != nil {
 			t.Error(err)
 		}
-		regex := "goroutine [\\d]+ \\[running\\]:"
-		match, err := regexp.Match(regex, []byte(line))
+
+		goroutineRegex := "^goroutine [\\d]+ \\[running\\]:"
+		match, err := regexp.Match(goroutineRegex, []byte(line))
 		if err != nil {
 			t.Error(err)
 		}
 		if !match {
-			t.Errorf("expected pattern (first line of stack trace): \"%s\", got: %s", regex, line)
+			t.Errorf("expected pattern (first line): \"%s\", got: %s", goroutineRegex, line)
+		}
+
+		line, err = buffer.ReadString(byte('\n'))
+		if err != nil {
+			t.Error(err)
+		}
+
+		functionSignatureRegex := "^github.com/irfansharif/log.TestEnableTracePoint"
+		match, err = regexp.Match(functionSignatureRegex, []byte(line))
+		if err != nil {
+			t.Error(err)
+		}
+		if !match {
+			t.Errorf("expected pattern (second line): \"%s\", got: %s", functionSignatureRegex, line)
 		}
 	}
+}
+
+func TestX(t *testing.T) {
+	fmt.Println("hi", "hello")
+	fmt.Print(fmt.Sprintln("hi", "hello"))
 }

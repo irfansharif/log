@@ -14,12 +14,12 @@
 
 package log
 
-type mode int
+type Mode int
 
 const (
 	// TODO(irfansharif): FatalMode cannot be disabled. Ensure, perhaps there's
 	// a way to enforce this implicitly in representation.
-	InfoMode mode = 1 << iota
+	InfoMode Mode = 1 << iota
 	WarnMode
 	ErrorMode
 	FatalMode
@@ -31,7 +31,7 @@ const (
 	DefaultMode  = InfoMode | WarnMode | ErrorMode | FatalMode
 )
 
-func (m mode) String() string {
+func (m Mode) string() string {
 	switch m {
 	case InfoMode:
 		return "I"
@@ -43,8 +43,6 @@ func (m mode) String() string {
 		return "F"
 	case DebugMode:
 		return "D"
-	case DisabledMode:
-		return "X"
 	default:
 		return "?"
 	}

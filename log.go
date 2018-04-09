@@ -15,6 +15,7 @@
 package log
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"runtime"
@@ -22,21 +23,34 @@ import (
 	"strings"
 )
 
+// TODO(irfansharif): Allow for logging flags, configuring output.
+// TODO(irfansharif): Allow for tags.
+// TODO(irfansharif): Allow for custom leveling (verbosity, should work at the
+// same filtered granularities).
+
 // Logger. TODO(irfansharif): Comment.
 type Logger struct {
 	w io.Writer
 }
 
+func configure(l *Logger) {
+}
+
 // TODO(irfansharif): Wrap configurations in variadic options.
 // TODO(irfansharif): Make a rotated log, dir io.Writer.
-func New(w io.Writer) *Logger {
-	return &Logger{
+func New(w io.Writer, options ...option) *Logger {
+	l := &Logger{
 		w: w,
 	}
+	for _, option := range options {
+		option(l)
+	}
+	configure(l)
+	return l
 }
 
 func (l *Logger) Info(v ...interface{}) {
-	l.log(InfoMode, fmt.Sprintf("%v", v...))
+	l.log(InfoMode, fmt.Sprintln(v...))
 }
 
 func (l *Logger) Infof(format string, v ...interface{}) {
@@ -44,7 +58,7 @@ func (l *Logger) Infof(format string, v ...interface{}) {
 }
 
 func (l *Logger) Warn(v ...interface{}) {
-	l.log(WarnMode, fmt.Sprintf("%v", v...))
+	l.log(WarnMode, fmt.Sprint(v...))
 }
 
 func (l *Logger) Warnf(format string, v ...interface{}) {
@@ -52,7 +66,7 @@ func (l *Logger) Warnf(format string, v ...interface{}) {
 }
 
 func (l *Logger) Error(v ...interface{}) {
-	l.log(ErrorMode, fmt.Sprintf("%v", v...))
+	l.log(ErrorMode, fmt.Sprint(v...))
 }
 
 func (l *Logger) Errorf(format string, v ...interface{}) {
@@ -60,7 +74,7 @@ func (l *Logger) Errorf(format string, v ...interface{}) {
 }
 
 func (l *Logger) Fatal(v ...interface{}) {
-	l.log(FatalMode, fmt.Sprintf("%v", v...))
+	l.log(FatalMode, fmt.Sprint(v...))
 }
 
 func (l *Logger) Fatalf(format string, v ...interface{}) {
@@ -68,37 +82,52 @@ func (l *Logger) Fatalf(format string, v ...interface{}) {
 }
 
 func (l *Logger) Debug(v ...interface{}) {
-	l.log(DebugMode, fmt.Sprintf("%v", v...))
+	l.log(DebugMode, fmt.Sprint(v...))
 }
 
 func (l *Logger) Debugf(format string, v ...interface{}) {
 	l.log(DebugMode, fmt.Sprintf(format, v...))
 }
 
-// TODO(irfansharif): Document that backtrace may be emitted despite not being
-// in the right mode.
-func (l *Logger) log(lmode mode, data string) {
-	// Logger.log is called from Logger.{Info,Warn,Error,Fatal,Debug}{,f}. We
-	// use a depth of two to retrieve the caller immediately preceding it.
+// TODO(irfansharif): Document that backtrace may be emitted at statements from any mode.
+func (l *Logger) log(lmode Mode, data string) {
+	// Logger.log is only to be called from
+	// Logger.{Info,Warn,Error,Fatal,Debug}{,f}. We use a depth of two to
+	// retrieve the caller immediately preceding it.
 	file, line := caller(2)
 	tp := fmt.Sprintf("%s:%d", file, line)
+
+	tpenabled := CheckTracePoint(tp)
+	if tpenabled {
+		// Skip logger.log, and the invoking public wrapper
+		// Logger.{Info,Warn,Error,Fatal,Debug}{,f}
+		// TODO(irfansharif): Should this have the logger header as well?
+		l.w.Write(stacktrace(2))
+	}
 
 	gmode := GetGlobalLogMode()
 	fmode, ok := GetFileLogMode(file)
 	shouldLog := (gmode&lmode) != DisabledMode || (ok && (fmode&lmode) != DisabledMode)
-	if shouldLog {
-		l.w.Write([]byte(fmt.Sprintf("%s %s: %s\n", lmode.String(), tp, data)))
+	if !shouldLog {
+		return
 	}
 
-	tpenabled := CheckTracePoint(tp)
-	if tpenabled {
-		l.w.Write(stacktrace())
-	}
+	l.w.Write([]byte(fmt.Sprintf("%s %s: %s", lmode.string(), tp, data)))
 }
 
-// stacktrace returns the stack trace for the current goroutine.
-func stacktrace() []byte {
-	return debug.Stack()
+// TODO(irfansharif): Better comment. stacktrace returns the stack trace for
+// the current goroutine, skipping n immediately preceding function traces
+// (last being the caller, inclusive of the caller).
+func stacktrace(skip int) []byte {
+	skip *= 2 // Each function depth corresponds to to lines of stack trace output.
+	skip += 2 // For debug.Stack()
+	skip += 2 // For this function, log.stacktrace()
+
+	b := debug.Stack()
+	bs := bytes.Split(b, []byte("\n"))
+	copy(bs[1:], bs[1+skip:]) // TODO(irfansharif): Is this a pointer copy? It could be.
+	bs = bs[:len(bs)-skip]
+	return bytes.Join(bs, []byte("\n"))
 }
 
 // caller returns the file and line number of where the caller's caller's
