@@ -12,8 +12,8 @@ func TestSetGetGlobalPCMode(t *testing.T) {
 	defer func() { resetgstate() }()
 
 	tp := fmt.Sprintf("%s:%d", "t.go", 42)
-	EnableTracePoint(tp)
-	enabled := CheckTracePoint(tp)
+	SetTracePoint(tp)
+	enabled := GetTracePoint(tp)
 	if !enabled {
 		t.Errorf("Expected tracepoint %s to be enabled", tp)
 	}
@@ -24,7 +24,7 @@ func TestGetGlobalPCMode(t *testing.T) {
 	defer func() { resetgstate() }()
 
 	tp := fmt.Sprintf("%s:%d", "t.go", 42)
-	enabled := CheckTracePoint(tp)
+	enabled := GetTracePoint(tp)
 	if enabled {
 		t.Errorf("Didn't expected tracepoint mode for %s to be enabled", tp)
 	}
@@ -125,8 +125,8 @@ func TestEnableTracePoint(t *testing.T) {
 
 	file, line := caller(0)
 	tp := fmt.Sprintf("%s:%d", file, line+10)
-	EnableTracePoint(tp)
-	if tpenabled := CheckTracePoint(tp); !tpenabled {
+	SetTracePoint(tp)
+	if tpenabled := GetTracePoint(tp); !tpenabled {
 		t.Error("Expected tracepoint %s to be enabled; found disabled", tp)
 	}
 

@@ -58,10 +58,10 @@ func GetGlobalLogMode() Mode {
 	return gstate.gmode.Load().(Mode)
 }
 
-// EnableTracePoint enables the provided tracepoint. A tracepoint is of the form
+// SetTracePoint enables the provided tracepoint. A tracepoint is of the form
 // filename.go:line-number (compiles to [\w]+.go:[\d]+) corresponding to the position of a logging
 // statement that once enabled, emits a backtrace when the logging statement is executed.
-func EnableTracePoint(tp string) {
+func SetTracePoint(tp string) {
 	gstate.tracePointMu.Lock()                         // Synchronize with other potential writers.
 	ma := gstate.tracePointMu.m.Load().(tracePointMap) // Load current value of the map.
 	mb := make(tracePointMap)                          // Create a new map.
@@ -76,8 +76,8 @@ func EnableTracePoint(tp string) {
 	gstate.tracePointMu.Unlock()
 }
 
-// CheckTracePoint checks if the corresponding tracepoint is enabled.
-func CheckTracePoint(tp string) (tpenabled bool) {
+// GetTracePoint checks if the corresponding tracepoint is enabled.
+func GetTracePoint(tp string) (tpenabled bool) {
 	tpmap := gstate.tracePointMu.m.Load().(tracePointMap)
 	_, ok := tpmap[tp]
 	return ok

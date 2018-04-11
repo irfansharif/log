@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 
 	"github.com/irfansharif/log"
@@ -53,18 +54,19 @@ func main() {
 		log.SetFileLogMode(flm.fname, flm.fmode)
 	}
 	for _, tp := range backtracePointFlag {
-		log.EnableTracePoint(tp)
+		log.SetTracePoint(tp)
 	}
 
 	var writer io.Writer
-	// writer = ioutil.Discard
-	// writer = log.SynchronizedWriter(writer)
 	if logDirFlag != "" {
-		writer = log.RotatingDirectoryLogger(logDirFlag)
+		writer = log.LogRotationWriter(logDirFlag, 50<<20 /* 50 MiB */)
+	} else {
+		writer = ioutil.Discard
 	}
 	if logToStderrFlag {
 		writer = log.MultiWriter(writer, os.Stderr)
 	}
+	writer = log.SynchronizedWriter(writer)
 
 	logger := log.New(writer)
 	logger.Info("log-dir:", logDirFlag)

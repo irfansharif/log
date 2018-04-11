@@ -16,7 +16,7 @@ package log
 
 type option func(*Logger)
 
-func X(dirname string) option {
+func Flags(dirname string) option {
 	return func(l *Logger) {
 	}
 }

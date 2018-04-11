@@ -38,7 +38,6 @@ func configure(l *Logger) {
 }
 
 // TODO(irfansharif): Wrap configurations in variadic options.
-// TODO(irfansharif): Make a rotated log, dir io.Writer.
 func New(w io.Writer, options ...option) *Logger {
 	l := &Logger{
 		w: w,
@@ -98,7 +97,7 @@ func (l *Logger) log(lmode Mode, data string) {
 	file, line := caller(2)
 	tp := fmt.Sprintf("%s:%d", file, line)
 
-	tpenabled := CheckTracePoint(tp)
+	tpenabled := GetTracePoint(tp)
 	if tpenabled {
 		// Skip logger.log, and the invoking public wrapper
 		// Logger.{Info,Warn,Error,Fatal,Debug}{,f}
