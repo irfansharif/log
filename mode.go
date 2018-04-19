@@ -47,3 +47,20 @@ func (m Mode) string() string {
 		return "?"
 	}
 }
+
+func (m Mode) byte() byte {
+	switch m {
+	case InfoMode:
+		return 'I'
+	case WarnMode:
+		return 'W'
+	case ErrorMode:
+		return 'E'
+	case FatalMode:
+		return 'F'
+	case DebugMode:
+		return 'D'
+	default:
+		return '?'
+	}
+}

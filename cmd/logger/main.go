@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	stdlog "log"
 	"os"
 
 	"github.com/irfansharif/log"
+	"github.com/irfansharif/log/cmd/logger/pkg"
+	"github.com/irfansharif/log/cmd/logger/pkg/subpkg"
 )
 
 // $ <binary-name> -help
@@ -68,10 +71,22 @@ func main() {
 	}
 	writer = log.SynchronizedWriter(writer)
 
-	logger := log.New(writer)
-	logger.Info("log-dir:", logDirFlag)
-	logger.Info("log-to-stderr:", logToStderrFlag)
-	logger.Info("log-mode:", logModeFlag.String())
-	logger.Info("log-filter:", logFilterFlag.String())
-	logger.Info("log-backtrace-at:", backtracePointFlag.String())
+	_ = stdlog.Llongfile
+
+	// stdlogf := stdlog.Ldate | stdlog.Ltime | stdlog.Lmicroseconds | stdlog.Lshortfile | stdlog.LUTC
+	// l := stdlog.New(os.Stdout, "", stdlogf)
+	// l.Println("hi")
+
+	logf := log.Ldate | log.Ltime | log.Lmicroseconds | log.Llongfile | log.LUTC | log.Lmode
+	logger := log.New(writer, log.Flags(logf), log.SkipProjectPath())
+
+	logger.Debug("log-dir:", logDirFlag)
+	logger.Debug("log-to-stderr:", logToStderrFlag)
+	logger.Debug("log-mode:", logModeFlag.String())
+	logger.Debug("log-filter:", logFilterFlag.String())
+	logger.Debug("log-backtrace-at:", backtracePointFlag.String())
+
+	logger.Info("from main!")
+	pkg.Log(logger)
+	subpkg.Log(logger)
 }

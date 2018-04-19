@@ -127,7 +127,7 @@ func TestEnableTracePoint(t *testing.T) {
 	tp := fmt.Sprintf("%s:%d", file, line+10)
 	SetTracePoint(tp)
 	if tpenabled := GetTracePoint(tp); !tpenabled {
-		t.Error("Expected tracepoint %s to be enabled; found disabled", tp)
+		t.Errorf("Expected tracepoint %s to be enabled; found disabled", tp)
 	}
 
 	buffer := new(bytes.Buffer)

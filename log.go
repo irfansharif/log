@@ -21,8 +21,10 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"time"
 )
 
+// TODO(irfansharif): Provide an _ import like debug/pprof for logger config?
 // TODO(irfansharif): Provide a catchall global logger with warning?
 // TODO(irfansharif): Allow for logging flags, configuring output.
 // TODO(irfansharif): Allow for tags.
@@ -31,21 +33,27 @@ import (
 
 // Logger. TODO(irfansharif): Comment.
 type Logger struct {
-	w io.Writer
+	w    io.Writer
+	flag Flag
+	// TODO(irfansharif): Comment.
+	bdir string
 }
 
 func configure(l *Logger) {
+	l.flag = LstdFlags
+	l.bdir = ""
 }
 
-// TODO(irfansharif): Wrap configurations in variadic options.
+// TODO(irfansharif): Wrap configurations in variadic options. What about
+// errors in options?
 func New(w io.Writer, options ...option) *Logger {
 	l := &Logger{
 		w: w,
 	}
+	configure(l)
 	for _, option := range options {
 		option(l)
 	}
-	configure(l)
 	return l
 }
 
@@ -112,12 +120,113 @@ func (l *Logger) log(lmode Mode, data string) {
 		return
 	}
 
-	l.w.Write([]byte(fmt.Sprintf("%s %s: %s", lmode.string(), tp, data)))
+	// TODO(irfansharif): Refactor out multiple calls to runtime.Caller in this
+	// codepath.
+	_, fullFile, _, ok := runtime.Caller(2)
+	if !ok {
+		// TODO(irfansharif): Can we not panic and write out garbled log keys instead?
+		panic("unabled to retrieve caller")
+	}
+
+	var buf bytes.Buffer
+	buf.Write(l.header(lmode, time.Now(), fullFile, line))
+	buf.WriteString(data)
+
+	l.w.Write(buf.Bytes())
 }
 
-// TODO(irfansharif): Better comment. stacktrace returns the stack trace for
-// the current goroutine, skipping n immediately preceding function traces
-// (last being the caller, inclusive of the caller).
+func (l *Logger) header(lmode Mode, t time.Time, file string, line int) []byte {
+	var b []byte
+	var buf *[]byte = &b
+	if l.flag&(Lmode) != 0 {
+		*buf = append(*buf, lmode.byte())
+	}
+	if l.flag&LUTC != 0 {
+		t = t.UTC()
+	}
+	if l.flag&(Ldate|Ltime|Lmicroseconds) != 0 {
+		datef := l.flag&Ldate != 0
+		timef := l.flag&(Ltime|Lmicroseconds) != 0
+		if datef {
+			year, month, day := t.Date()
+			// TODO(irfansharif): Comment this somewhere; or just directly use
+			// the last two numbers.
+			if year < 2000 {
+				year = 2000
+			}
+			itoa(buf, year-2000, 2)
+			itoa(buf, int(month), 2)
+			itoa(buf, day, 2)
+		}
+
+		if datef && timef {
+			*buf = append(*buf, ' ')
+		}
+
+		if timef {
+			hour, min, sec := t.Clock()
+			itoa(buf, hour, 2)
+			*buf = append(*buf, ':')
+			itoa(buf, min, 2)
+			*buf = append(*buf, ':')
+			itoa(buf, sec, 2)
+			if l.flag&Lmicroseconds != 0 {
+				*buf = append(*buf, '.')
+				itoa(buf, t.Nanosecond()/1e3, 6)
+			}
+		}
+	}
+
+	*buf = append(*buf, ' ')
+
+	if l.flag&(Lshortfile|Llongfile) != 0 {
+		// TODO(irfansharif): Better error for wrong indexing, however that may
+		// arise. Comment.
+		file = file[len(l.bdir):]
+		if len(l.bdir) != 0 {
+			// [1:] is for leading '/', if bdir is non-empty.
+			file = file[1:]
+		}
+
+		if l.flag&Lshortfile != 0 {
+			short := file
+			for i := len(file) - 1; i > 0; i-- {
+				if file[i] == '/' {
+					short = file[i+1:]
+					break
+				}
+			}
+			file = short
+		}
+		*buf = append(*buf, file...)
+		*buf = append(*buf, ':')
+		itoa(buf, line, -1)
+		*buf = append(*buf, " "...)
+	}
+	return b
+}
+
+// Cheap integer to fixed-width decimal ASCII.  Give a negative width to avoid zero-padding.
+func itoa(buf *[]byte, i int, wid int) {
+	// Assemble decimal in reverse order.
+	var b [20]byte
+	bp := len(b) - 1
+	for i >= 10 || wid > 1 {
+		wid--
+		q := i / 10
+		b[bp] = byte('0' + i - q*10)
+		bp--
+		i = q
+	}
+	// i < 10
+	b[bp] = byte('0' + i)
+	*buf = append(*buf, b[bp:]...)
+}
+
+// TODO(irfansharif): Better comment.
+// stacktrace returns the stack trace for the current goroutine, skipping n
+// immediately preceding function traces (last being the caller, inclusive of
+// the caller).
 func stacktrace(skip int) []byte {
 	skip *= 2 // Each function depth corresponds to to lines of stack trace output.
 	skip += 2 // For debug.Stack()
@@ -130,6 +239,8 @@ func stacktrace(skip int) []byte {
 	return bytes.Join(bs, []byte("\n"))
 }
 
+// TODO(irfansharif): Profile perf characteristics of runtime.Caller.
+//
 // caller returns the file and line number of where the caller's caller's
 // call site.
 //

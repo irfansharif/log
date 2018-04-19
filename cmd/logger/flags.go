@@ -129,6 +129,7 @@ func (l *backtracePoints) Set(value string) error {
 	return nil
 }
 
+// TODO(irfansharif): How to handle disabled mode?
 func modeFromString(value string) (log.Mode, error) {
 	var m log.Mode
 	for _, mode := range strings.Split(value, "|") {
