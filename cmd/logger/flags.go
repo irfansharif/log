@@ -10,19 +10,23 @@ import (
 	"github.com/irfansharif/log"
 )
 
-type logMode log.Mode
+type logMode struct {
+	m   log.Mode
+	set bool
+}
 
-// TODO(irfansharif): Understand readonly/non-pointer method pattern.
 func (l logMode) String() string {
-	return modeToString(log.Mode(l))
+	return modeToString(log.Mode(l.m))
 }
 
 func (l *logMode) Set(value string) error {
+	l.set = true
+
 	m, err := modeFromString(value)
 	if err != nil {
 		return err
 	}
-	*l = logMode(m)
+	l.m = m
 	return nil
 }
 
@@ -129,7 +133,6 @@ func (l *backtracePoints) Set(value string) error {
 	return nil
 }
 
-// TODO(irfansharif): How to handle disabled mode?
 func modeFromString(value string) (log.Mode, error) {
 	var m log.Mode
 	for _, mode := range strings.Split(value, "|") {
@@ -142,6 +145,9 @@ func modeFromString(value string) (log.Mode, error) {
 			m |= log.WarnMode
 		case "error":
 			m |= log.ErrorMode
+		case "disabled":
+			m = log.DisabledMode
+			break
 		default:
 			return m, errors.New(fmt.Sprintf("unrecognized mode: %s", m))
 		}

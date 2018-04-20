@@ -15,6 +15,7 @@
 package log
 
 import (
+	"io"
 	"path/filepath"
 	"runtime"
 )
@@ -30,10 +31,10 @@ const (
 	// here) or the format they present (as described in the comments).
 	//
 	// For example, flags Lmode | Ldate | Ltime | Lshortfile, produces:
-	//  I180419 06:33:04.606396 fname.go:42 message
+	//   I180419 06:33:04 fname.go:42 message
 	//
-	// Flags Ldate | Ltime | Llongfile, produces:
-	//  180419 06:33:04 /src/repo/fname.go:42 message
+	// Flags Ldate | Ltime | Lmicroseconds | Llongfile, produces:
+	//   180419 06:33:04.606396 /src/repo/fname.go:42 message
 
 	Ldate         Flag = 1 << iota // The date in the local time zone: 180419 (yymmdd)
 	Ltime                          // The time in the local time zone: 01:23:23
@@ -43,17 +44,26 @@ const (
 	LUTC                           // If Ldate or Ltime is set, use UTC instead of local time zone
 	Lmode                          // If Lmode is set, each line is prefixed by statement log mode
 
-	// Default values for the logger
+	// Default values for the logger, produces:
+	//   I180419 06:33:04.606396 fname.go:42 message
 	LstdFlags = Lmode | Ldate | Ltime | Lmicroseconds | LUTC | Lshortfile
 )
 
+// Writer configures a Logger instance with the specified io.Writer.
+func Writer(w io.Writer) option {
+	return func(l *Logger) {
+		l.w = w
+	}
+}
+
+// Flags configures the header format for all logs emitted by a Logger instance.
 func Flags(flags Flag) option {
 	return func(l *Logger) {
 		l.flag = flags
 	}
 }
 
-// SkipProjectPath allows for log.Llongfile to only write out filepaths
+// SkipBasePath allows for log.Llongfile to only write out filepaths
 // relative to project root. For example:
 //
 //  I180419 06:33:04.606396 main.go:89 from main!
@@ -66,12 +76,12 @@ func Flags(flags Flag) option {
 //  I180419 06:36:26.554555 [...]/log/cmd/logger/pkg/logger.go:6 from pkg!
 //  I180419 06:36:26.554566 [...]/log/cmd/logger/pkg/subpkg/logger.go:6 from pkg/subpkg!
 //
-// Use SkipProjectPath() with no arguments if calling from the root of the
+// Use SkipBasePath() with no arguments if calling from the root of the
 // project/repository (think top level main.go). Barring that, passing in the
-// fully qualified path of the project root strips out the corresponding prefix
+// fully qualified path of the project base strips out the corresponding prefix
 // from subsequent log statements.
-func SkipProjectPath(path ...string) option {
-	var bdir string
+func SkipBasePath(path ...string) option {
+	var basePath string
 	if len(path) > 1 {
 		panic("expecting single root dir")
 	}
@@ -82,13 +92,13 @@ func SkipProjectPath(path ...string) option {
 		if !ok {
 			panic("unable to retrieve caller")
 		}
-		bdir = filepath.Dir(file)
+		basePath = filepath.Dir(file)
 	} else {
 		// len(path) == 1; base dir is provided.
-		bdir = path[0]
+		basePath = path[0]
 	}
 
 	return func(l *Logger) {
-		l.bdir = bdir
+		l.basePath = basePath
 	}
 }

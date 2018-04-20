@@ -14,21 +14,21 @@
 
 package log
 
+// TODO(irfansharif): Comment, explain modal logging concept.
 type Mode int
 
 const (
-	// TODO(irfansharif): FatalMode cannot be disabled. Ensure, perhaps there's
-	// a way to enforce this implicitly in representation.
 	InfoMode Mode = 1 << iota
 	WarnMode
 	ErrorMode
 	FatalMode
 	DebugMode
 
-	// TODO(irfansharif): Is there a way to not check for this explicitly every
-	// time? Somehow embed this in the representation?
+	// Zero-value of DisableMode is checked against, i.e. (lmode&gmode) !=
+	// DisabledMode checks if the local logger mode is filtered through by the
+	// global mode.
 	DisabledMode = 0
-	DefaultMode  = InfoMode | WarnMode | ErrorMode | FatalMode
+	DefaultMode  = InfoMode | WarnMode | ErrorMode
 )
 
 func (m Mode) string() string {

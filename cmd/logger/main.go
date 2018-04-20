@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	stdlog "log"
+	"io/ioutil"
 	"os"
 
 	"github.com/irfansharif/log"
@@ -50,7 +50,9 @@ func main() {
 
 	flag.Parse()
 
-	log.SetGlobalLogMode(log.Mode(logModeFlag))
+	if logModeFlag.set {
+		log.SetGlobalLogMode(log.Mode(logModeFlag.m))
+	}
 	for _, flm := range logFilterFlag {
 		log.SetFileLogMode(flm.fname, flm.fmode)
 	}
@@ -58,7 +60,7 @@ func main() {
 		log.SetTracePoint(tp)
 	}
 
-	writer := log.DefaultWriter()
+	writer := ioutil.Discard
 	if logDirFlag != "" {
 		writer = log.LogRotationWriter(logDirFlag, 50<<20 /* 50 MiB */)
 	}
@@ -67,14 +69,8 @@ func main() {
 	}
 	writer = log.SynchronizedWriter(writer)
 
-	_ = stdlog.Llongfile
-
-	// stdlogf := stdlog.Ldate | stdlog.Ltime | stdlog.Lmicroseconds | stdlog.Lshortfile | stdlog.LUTC
-	// l := stdlog.New(os.Stdout, "", stdlogf)
-	// l.Println("hi")
-
 	logf := log.Ldate | log.Ltime | log.Lmicroseconds | log.Llongfile | log.LUTC | log.Lmode
-	logger := log.New(writer, log.Flags(logf), log.SkipProjectPath())
+	logger := log.New(log.Writer(writer), log.Flags(logf), log.SkipBasePath())
 
 	logger.Debug("log-dir:", logDirFlag)
 	logger.Debug("log-to-stderr:", logToStderrFlag)

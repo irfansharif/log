@@ -1,3 +1,10 @@
+// Copyright 2009 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in licenses/BSD-golang.txt.
+
+// Portions of this file are additionally subject to the following
+// license and copyright.
+//
 // Copyright 2018, Irfan Sharif.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,87 +25,129 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
-	"strings"
 	"time"
 )
 
-// TODO(irfansharif): Provide an _ import like debug/pprof for logger config?
-// TODO(irfansharif): Provide a catchall global logger with warning?
-// TODO(irfansharif): Implement tagging API.
-// TODO(irfansharif): Implement custom leveling/verbosity, should work at the
-// same filtered granularities.
+// TODO(irfansharif): Implement an _ import like debug/pprof for logger config?
+// TODO(irfansharif): Implement a catchall global logger with warning?
+// TODO(irfansharif): Implement tagging API?
+// TODO(irfansharif): Implement custom leveling/verbosity with filtering?
 
-// TODO(irfansharif): Comment (including each field).
+// Logger is the concrete logger type. It writes out logs to the specified
+// io.Writer, with the header format determined by the flags set.
 type Logger struct {
-	w    io.Writer
-	flag Flag
-	bdir string
+	w        io.Writer // Where logs are written to
+	flag     Flag      // Flag set determining log headers. See options.go
+	basePath string    // Base path of the consumer's repository, optional
 }
 
+// configure sets up the default options for the Logger, these include a
+// synchronized os.Stderr writer, an empty basepath (Llongfile will
+// consequently print out the fully specified path) and Lstdflags, which
+// produces logs with the following header format:
+//
+//   Myymmdd hh:mm:ss:millis filename:ln message
+// 	 I180419 06:33:04.606396 fname.go:42 message
 func configure(l *Logger) {
+	l.w = DefaultWriter()
 	l.flag = LstdFlags
-	l.bdir = ""
+	l.basePath = ""
 }
 
-func New(w io.Writer, options ...option) *Logger {
-	l := &Logger{
-		w: w,
-	}
+// New returns a new Logger, configured with the provided options, if any.
+func New(options ...option) *Logger {
+	l := &Logger{}
 	configure(l)
+
+	// Overrides.
 	for _, option := range options {
 		option(l)
 	}
 	return l
 }
 
+// Info logs to the INFO log. Arguments are handled in the manner of fmt.Println;
+// a newline is appended at the end.
 func (l *Logger) Info(v ...interface{}) {
 	l.log(InfoMode, fmt.Sprintln(v...))
 }
 
+// Infof logs to the INFO log. Arguments are handled in the manner of fmt.Printf;
+// a newline is appended at the end.
 func (l *Logger) Infof(format string, v ...interface{}) {
 	l.log(InfoMode, fmt.Sprintf(format, v...))
 }
 
+// Warn logs to the WARN log. Arguments are handled in the manner of fmt.Println;
+// a newline is appended at the end.
 func (l *Logger) Warn(v ...interface{}) {
 	l.log(WarnMode, fmt.Sprint(v...))
 }
 
+// Warnf logs to the WARN log. Arguments are handled in the manner of fmt.Printf;
+// a newline is appended at the end.
 func (l *Logger) Warnf(format string, v ...interface{}) {
 	l.log(WarnMode, fmt.Sprintf(format, v...))
 }
 
+// Error logs to the ERROR log. Arguments are handled in the manner of fmt.Println;
+// a newline is appended at the end.
 func (l *Logger) Error(v ...interface{}) {
 	l.log(ErrorMode, fmt.Sprint(v...))
 }
 
+// Errorf logs to the ERROR log. Arguments are handled in the manner of fmt.Printf;
+// a newline is appended at the end.
 func (l *Logger) Errorf(format string, v ...interface{}) {
 	l.log(ErrorMode, fmt.Sprintf(format, v...))
 }
 
+// Fatal logs to the FATAL log. Arguments are handled in the manner of fmt.Println;
+// a newline is appended at the end.
+//
+// TODO(irfansharif): Including a stack trace of all running goroutines, then
+// calls os.Exit(255).
 func (l *Logger) Fatal(v ...interface{}) {
 	l.log(FatalMode, fmt.Sprint(v...))
 }
 
+// Fatalf logs to the FATAL log. Arguments are handled in the manner of fmt.Printf;
+// a newline is appended at the end.
+//
+// TODO(irfansharif): Including a stack trace of all running goroutines, then
+// calls os.Exit(255).
 func (l *Logger) Fatalf(format string, v ...interface{}) {
 	l.log(FatalMode, fmt.Sprintf(format, v...))
 }
 
+// Debug logs to the DEBUG log. Arguments are handled in the manner of fmt.Println;
+// a newline is appended at the end.
 func (l *Logger) Debug(v ...interface{}) {
 	l.log(DebugMode, fmt.Sprint(v...))
 }
 
+// Debugf logs to the DEBUG log. Arguments are handled in the manner of fmt.Printf;
+// a newline is appended at the end.
 func (l *Logger) Debugf(format string, v ...interface{}) {
 	l.log(DebugMode, fmt.Sprintf(format, v...))
 }
 
+// Logger.log is only to be called from
+// Logger.{Info,Warn,Error,Fatal,Debug}{,f}. We use a depth of two to
+// retrieve the caller immediately preceding it.
 func (l *Logger) log(lmode Mode, data string) {
-	// Logger.log is only to be called from
-	// Logger.{Info,Warn,Error,Fatal,Debug}{,f}. We use a depth of two to
-	// retrieve the caller immediately preceding it.
+	// TODO(irfansharif): Right now this isn't robust to shared filenames
+	// across varied sub packages (for tracepoints and file log modes both).
+	// This is a stand-in to allow for direct file name specification without
+	// fully-specified paths (in the host machine or relative to project root).
+	// We could implement for project root relative paths if project root was
+	// provided.
 	file, line := caller(2)
-	tp := fmt.Sprintf("%s:%d", file, line)
+	bfile := filepath.Base(file)
+	tp := fmt.Sprintf("%s:%d", bfile, line)
 
 	tpenabled := GetTracePoint(tp)
 	if tpenabled {
@@ -107,31 +156,34 @@ func (l *Logger) log(lmode Mode, data string) {
 		l.w.Write(stacktrace(2))
 	}
 
-	gmode := GetGlobalLogMode()
-	fmode, ok := GetFileLogMode(file)
-	// TODO(irfansharif): We're not overriding at the file level.
-	shouldLog := (gmode&lmode) != DisabledMode ||
-		(ok && (fmode&lmode) != DisabledMode) ||
-		(lmode&FatalMode) != DisabledMode
+	var shouldLog bool
+	if gmode := GetGlobalLogMode(); (gmode & lmode) != DisabledMode {
+		// Log mode satisfies global mode.
+		shouldLog = true
+	} else if fmode, ok := GetFileLogMode(bfile); ok && (fmode&lmode) != DisabledMode {
+		// Log mode satisfies specific file mode, and crucially, not the global
+		// mode. File mode filtering is only to be used for overrides, if global
+		// log mode is satisfied, we already capture it.
+		shouldLog = true
+	} else if (lmode & FatalMode) != DisabledMode {
+		// Logger.Fatal{,f} statements aren't filtered out.
+		shouldLog = true
+	}
+
 	if !shouldLog {
 		return
 	}
 
-	// TODO(irfansharif): Refactor out multiple calls to runtime.Caller in this
-	// codepath.
-	_, fullFile, _, ok := runtime.Caller(2)
-	if !ok {
-		// TODO(irfansharif): Don't panic; write out garbled log keys instead.
-		panic("unabled to retrieve caller")
-	}
-
 	var buf bytes.Buffer
-	buf.Write(l.header(lmode, time.Now(), fullFile, line))
+	buf.Write(l.header(lmode, time.Now(), file, line))
 	buf.WriteString(data)
-
 	l.w.Write(buf.Bytes())
 }
 
+// header, given the local log mode, time stamp, file name (fully qualified)
+// and line number, formats the log header as per Logger.flag and returns the
+// corresponding byte array. It also factors in the configured base path, if
+// any, so that of Llongfile is specified, the base path prefix is truncated.
 func (l *Logger) header(lmode Mode, t time.Time, file string, line int) []byte {
 	var b []byte
 	var buf *[]byte = &b
@@ -175,12 +227,14 @@ func (l *Logger) header(lmode Mode, t time.Time, file string, line int) []byte {
 	*buf = append(*buf, ' ')
 
 	if l.flag&(Lshortfile|Llongfile) != 0 {
-		// TODO(irfansharif): Better error for wrong indexing, however that may
-		// arise. Comment. This is coupled to how base dir is determined, and
-		// what the tracepoint format is.
-		file = file[len(l.bdir):]
-		if len(l.bdir) != 0 {
-			// [1:] is for leading '/', if bdir is non-empty.
+		// This will panic with index out of range if the project path is
+		// improperly configured. Consider project path is defined to be
+		// [...]/app/pkg/subpkg (read: not the project root), and is used at
+		// the top level, [...]/app/main.go, it will panic is it's trying to
+		// drop the prefix [...]/app.
+		file = file[len(l.basePath):]
+		if len(l.basePath) != 0 {
+			// [1:] is for leading '/', if basePath is non-empty.
 			file = file[1:]
 		}
 
@@ -197,12 +251,13 @@ func (l *Logger) header(lmode Mode, t time.Time, file string, line int) []byte {
 		*buf = append(*buf, file...)
 		*buf = append(*buf, ':')
 		itoa(buf, line, -1)
-		*buf = append(*buf, " "...)
+		*buf = append(*buf, ": "...)
 	}
 	return b
 }
 
-// Cheap integer to fixed-width decimal ASCII.  Give a negative width to avoid zero-padding.
+// Cheap integer to fixed-width decimal ASCII. Give a negative width to avoid
+// zero-padding.
 func itoa(buf *[]byte, i int, wid int) {
 	// Assemble decimal in reverse order.
 	var b [20]byte
@@ -267,7 +322,9 @@ func stacktrace(skip int) []byte {
 
 	b := debug.Stack()
 	bs := bytes.Split(b, []byte("\n"))
-	copy(bs[1:], bs[1+skip:]) // TODO(irfansharif): Is this a pointer copy? It could be.
+
+	// TODO(irfansharif): Are these pointer copies? It could/should be.
+	copy(bs[1:], bs[1+skip:])
 	bs = bs[:len(bs)-skip]
 	return bytes.Join(bs, []byte("\n"))
 }
@@ -301,15 +358,6 @@ func caller(depth int) (file string, line int) {
 	if !ok {
 		file = "[???]"
 		line = -1
-	} else {
-		// TODO(irfansharif): Right now this isn't robust to shared filenames
-		// across varied sub packages. This is a stand-in to allow for direct
-		// file name specification without fully-specified paths (in the host
-		// machine or relative to project root).
-		slash := strings.LastIndex(file, "/")
-		if slash >= 0 {
-			file = file[slash+1:]
-		}
 	}
 	return file, line
 }

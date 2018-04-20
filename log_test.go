@@ -3,6 +3,7 @@ package log
 import (
 	"bytes"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"testing"
 )
@@ -37,10 +38,10 @@ func TestInfoLog(t *testing.T) {
 	SetGlobalLogMode(InfoMode)
 
 	buffer := new(bytes.Buffer)
-	logger := New(buffer)
+	logger := New(Writer(buffer))
 	{
 		logger.Info("info")
-		regex := "^I [\\w]+.go:[\\d]+: info"
+		regex := "^I.*: info"
 		match, err := regexp.Match(regex, buffer.Bytes())
 		if err != nil {
 			t.Error(err)
@@ -52,7 +53,7 @@ func TestInfoLog(t *testing.T) {
 	}
 	{
 		logger.Infof("infof")
-		regex := "I [\\w]+.go:[\\d]+: infof"
+		regex := "^I.*: infof"
 		match, err := regexp.Match(regex, buffer.Bytes())
 		if err != nil {
 			t.Error(err)
@@ -64,7 +65,7 @@ func TestInfoLog(t *testing.T) {
 	}
 	{
 		logger.Infof("%t %d %s", true, 1, "infof")
-		regex := "I [\\w]+.go:[0-9]+: true [\\d]+ infof"
+		regex := "^I.*: true 1 infof"
 		match, err := regexp.Match(regex, buffer.Bytes())
 		if err != nil {
 			t.Error(err)
@@ -83,7 +84,7 @@ func TestDebugModeEnableDisable(t *testing.T) {
 	SetGlobalLogMode(InfoMode | DebugMode)
 
 	buffer := new(bytes.Buffer)
-	logger := New(buffer)
+	logger := New(Writer(buffer))
 	{
 		logger.Debug("debug")
 		logger.Debugf("%t %d %s", true, 1, "debugf")
@@ -101,7 +102,7 @@ func TestDebugModeEnableDisable(t *testing.T) {
 	}
 	{
 		logger.Debug("debug")
-		regex := "^D [\\w]+.go:[\\d]+: debug"
+		regex := "^D.*: debug"
 		match, err := regexp.Match(regex, buffer.Bytes())
 		if err != nil {
 			t.Error(err)
@@ -124,14 +125,14 @@ func TestEnableTracePoint(t *testing.T) {
 	// The tracepoint is set to be the line exactly ten lines below it.
 
 	file, line := caller(0)
-	tp := fmt.Sprintf("%s:%d", file, line+10)
+	tp := fmt.Sprintf("%s:%d", filepath.Base(file), line+10)
 	SetTracePoint(tp)
 	if tpenabled := GetTracePoint(tp); !tpenabled {
 		t.Errorf("Expected tracepoint %s to be enabled; found disabled", tp)
 	}
 
 	buffer := new(bytes.Buffer)
-	logger := New(buffer)
+	logger := New(Writer(buffer))
 	{
 		logger.Info()
 		if buffer.Len() == 0 {
