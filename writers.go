@@ -47,7 +47,10 @@ func init() {
 	pid = os.Getpid()
 }
 
-// TODO(irfansharif): Provide default synchronized os.Stderr writer.
+// DefaultWriter returns a default os.Stderr writer that is safe for concurrent use.
+func DefaultWriter() io.Writer {
+	return SynchronizedWriter(os.Stderr)
+}
 
 // LogRotationWriter returns an io.Writer that internally operates off the
 // specified directory where writes are written out to rotating files,

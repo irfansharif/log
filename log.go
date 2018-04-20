@@ -26,16 +26,14 @@ import (
 
 // TODO(irfansharif): Provide an _ import like debug/pprof for logger config?
 // TODO(irfansharif): Provide a catchall global logger with warning?
-// TODO(irfansharif): Allow for logging flags, configuring output.
-// TODO(irfansharif): Allow for tags.
-// TODO(irfansharif): Allow for custom leveling (verbosity, should work at the
-// same filtered granularities).
+// TODO(irfansharif): Implement tagging API.
+// TODO(irfansharif): Implement custom leveling/verbosity, should work at the
+// same filtered granularities.
 
-// Logger. TODO(irfansharif): Comment.
+// TODO(irfansharif): Comment (including each field).
 type Logger struct {
 	w    io.Writer
 	flag Flag
-	// TODO(irfansharif): Comment.
 	bdir string
 }
 
@@ -44,8 +42,6 @@ func configure(l *Logger) {
 	l.bdir = ""
 }
 
-// TODO(irfansharif): Wrap configurations in variadic options. What about
-// errors in options?
 func New(w io.Writer, options ...option) *Logger {
 	l := &Logger{
 		w: w,
@@ -97,7 +93,6 @@ func (l *Logger) Debugf(format string, v ...interface{}) {
 	l.log(DebugMode, fmt.Sprintf(format, v...))
 }
 
-// TODO(irfansharif): Document that backtrace may be emitted at statements from any mode.
 func (l *Logger) log(lmode Mode, data string) {
 	// Logger.log is only to be called from
 	// Logger.{Info,Warn,Error,Fatal,Debug}{,f}. We use a depth of two to
@@ -109,13 +104,15 @@ func (l *Logger) log(lmode Mode, data string) {
 	if tpenabled {
 		// Skip logger.log, and the invoking public wrapper
 		// Logger.{Info,Warn,Error,Fatal,Debug}{,f}
-		// TODO(irfansharif): Should this have the logger header as well?
 		l.w.Write(stacktrace(2))
 	}
 
 	gmode := GetGlobalLogMode()
 	fmode, ok := GetFileLogMode(file)
-	shouldLog := (gmode&lmode) != DisabledMode || (ok && (fmode&lmode) != DisabledMode)
+	// TODO(irfansharif): We're not overriding at the file level.
+	shouldLog := (gmode&lmode) != DisabledMode ||
+		(ok && (fmode&lmode) != DisabledMode) ||
+		(lmode&FatalMode) != DisabledMode
 	if !shouldLog {
 		return
 	}
@@ -124,7 +121,7 @@ func (l *Logger) log(lmode Mode, data string) {
 	// codepath.
 	_, fullFile, _, ok := runtime.Caller(2)
 	if !ok {
-		// TODO(irfansharif): Can we not panic and write out garbled log keys instead?
+		// TODO(irfansharif): Don't panic; write out garbled log keys instead.
 		panic("unabled to retrieve caller")
 	}
 
@@ -149,8 +146,6 @@ func (l *Logger) header(lmode Mode, t time.Time, file string, line int) []byte {
 		timef := l.flag&(Ltime|Lmicroseconds) != 0
 		if datef {
 			year, month, day := t.Date()
-			// TODO(irfansharif): Comment this somewhere; or just directly use
-			// the last two numbers.
 			if year < 2000 {
 				year = 2000
 			}
@@ -181,7 +176,8 @@ func (l *Logger) header(lmode Mode, t time.Time, file string, line int) []byte {
 
 	if l.flag&(Lshortfile|Llongfile) != 0 {
 		// TODO(irfansharif): Better error for wrong indexing, however that may
-		// arise. Comment.
+		// arise. Comment. This is coupled to how base dir is determined, and
+		// what the tracepoint format is.
 		file = file[len(l.bdir):]
 		if len(l.bdir) != 0 {
 			// [1:] is for leading '/', if bdir is non-empty.
@@ -223,10 +219,47 @@ func itoa(buf *[]byte, i int, wid int) {
 	*buf = append(*buf, b[bp:]...)
 }
 
-// TODO(irfansharif): Better comment.
 // stacktrace returns the stack trace for the current goroutine, skipping n
 // immediately preceding function traces (last being the caller, inclusive of
 // the caller).
+//
+// e.go: 32 func e() {
+// e.go: 33     f()
+// e.go: 34 }
+//
+// f.go: 11 func f() {
+// f.go: 12      g()
+// f.go: 13 }
+//
+// g.go: 25 func g() {
+// g.go: 26 	{
+// g.go: 27         // Request stack trace, skipping no preceding levels.
+// g.go: 28 		strace := stacktrace(0)
+// g.go: 29
+// g.go: 30         // goroutine 1 [running]:
+// g.go: 31         // g.g()
+// g.go: 32         //     /path/g.go:28 +0x2e
+// g.go: 33         // f.f()
+// g.go: 34         //     /path/f.go:12 +0x20
+// g.go: 35         // e.e()
+// g.go: 36         //     /path/e.go:33 +0x20
+// g.go: 37         // ...
+// g.go: 38 		fmt.Println(string(strace))
+// g.go: 39 	}
+// g.go: 40 	{
+// g.go: 41         // Request stack trace, skipping one preceding level.
+// g.go: 42 		strace := stacktrace(1)
+// g.go: 43
+// g.go: 44         // goroutine 1 [running]:
+// g.go: 45         // f.f()
+// g.go: 46         //     /path/f.go:12 +0x20
+// g.go: 47         // e.e()
+// g.go: 48         //     /path/e.go:33 +0x20
+// g.go: 49         // ...
+// g.go: 50 		fmt.Println(string(strace))
+// g.go: 51 	}
+// g.go: 52 }
+//
 func stacktrace(skip int) []byte {
 	skip *= 2 // Each function depth corresponds to to lines of stack trace output.
 	skip += 2 // For debug.Stack()
@@ -239,8 +272,6 @@ func stacktrace(skip int) []byte {
 	return bytes.Join(bs, []byte("\n"))
 }
 
-// TODO(irfansharif): Profile perf characteristics of runtime.Caller.
-//
 // caller returns the file and line number of where the caller's caller's
 // call site.
 //

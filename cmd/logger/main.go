@@ -3,8 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
-	"io/ioutil"
 	stdlog "log"
 	"os"
 
@@ -60,11 +58,9 @@ func main() {
 		log.SetTracePoint(tp)
 	}
 
-	var writer io.Writer
+	writer := log.DefaultWriter()
 	if logDirFlag != "" {
 		writer = log.LogRotationWriter(logDirFlag, 50<<20 /* 50 MiB */)
-	} else {
-		writer = ioutil.Discard
 	}
 	if logToStderrFlag {
 		writer = log.MultiWriter(writer, os.Stderr)

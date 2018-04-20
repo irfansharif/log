@@ -36,7 +36,8 @@ type gstateT struct {
 
 var gstate gstateT
 
-// Need to initialize the atomics; to be used once during init time and for tests.
+// Need to initialize the atomics; to be used once during init time and for
+// tests.
 func resetgstate() {
 	gstate.gmode.Store(DefaultMode)
 	gstate.tracePointMu.m.Store(make(tracePointMap))
@@ -59,8 +60,10 @@ func GetGlobalLogMode() Mode {
 }
 
 // SetTracePoint enables the provided tracepoint. A tracepoint is of the form
-// filename.go:line-number (compiles to [\w]+.go:[\d]+) corresponding to the position of a logging
-// statement that once enabled, emits a backtrace when the logging statement is executed.
+// filename.go:line-number (compiles to [\w]+.go:[\d]+) corresponding to the
+// position of a logging statement that once enabled, emits a backtrace when
+// the logging statement is executed. The specified tracepoint is agnostic to
+// the mode, i.e. Logger.{Info|Warn|Error|Fatal|Debug}{,f}, used at the line.
 func SetTracePoint(tp string) {
 	gstate.tracePointMu.Lock()                         // Synchronize with other potential writers.
 	ma := gstate.tracePointMu.m.Load().(tracePointMap) // Load current value of the map.
