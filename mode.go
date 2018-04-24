@@ -24,9 +24,9 @@ const (
 	FatalMode
 	DebugMode
 
-	// Zero-value of DisableMode is checked against, i.e. (lmode&gmode) !=
-	// DisabledMode checks if the local logger mode is filtered through by the
-	// global mode.
+	// The zero-value of DisableMode can also be used to check if modes
+	// intersect, i.e.  (lmode&gmode) != DisabledMode checks if the local
+	// logger mode is filtered through by the global mode.
 	DisabledMode = 0
 	DefaultMode  = InfoMode | WarnMode | ErrorMode
 )

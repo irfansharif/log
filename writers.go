@@ -1,16 +1,19 @@
+// Copyright 2013 Google Inc. All Rights Reserved.
 // Copyright 2018, Irfan Sharif.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+// Portions of this code originated in the github.com/golang/glog package.
 
 package log
 
@@ -64,10 +67,10 @@ func DefaultWriter() io.Writer {
 func LogRotationWriter(dirname string, sizeThreshold int) io.Writer {
 	os.MkdirAll(dirname, os.ModePerm)
 	return &logRotationWriter{
-		dirname:       dirname,
-		symlink:       fmt.Sprintf("%s.log", program),
-		bytesWritten:  0,
-		sizeThreshold: sizeThreshold,
+		dirname:         dirname,
+		symlink:         fmt.Sprintf("%s.log", program),
+		currentFileSize: 0,
+		sizeThreshold:   sizeThreshold,
 	}
 }
 
@@ -97,8 +100,8 @@ func generateLogFilename(t time.Time) (fname string) {
 }
 
 type logRotationWriter struct {
-	dirname, symlink            string
-	bytesWritten, sizeThreshold int
+	dirname, symlink               string
+	currentFileSize, sizeThreshold int
 
 	currentFile *os.File
 }
@@ -107,24 +110,21 @@ type logRotationWriter struct {
 // already or if we've written more bytes out than the provided threshold in
 // our previous log file.
 func (r *logRotationWriter) Write(b []byte) (n int, err error) {
-	if r.currentFile != nil && (r.bytesWritten+len(b) < r.sizeThreshold) {
-		n, err = r.currentFile.Write(b)
-		r.bytesWritten += n
-		return n, err
-	}
+	if r.currentFile == nil || (r.currentFileSize+len(b) > r.sizeThreshold) {
+		fname := generateLogFilename(time.Now())
+		f, err := os.Create(filepath.Join(r.dirname, fname))
+		if err != nil {
+			return 0, err
+		}
 
-	fname := generateLogFilename(time.Now())
-	f, err := os.Create(filepath.Join(r.dirname, fname))
-	if err != nil {
-		return 0, err
+		r.currentFile = f
+		r.currentFileSize = 0
+		os.Remove(filepath.Join(r.dirname, r.symlink))         // Remove symlink, if any, ignore error.
+		os.Symlink(fname, filepath.Join(r.dirname, r.symlink)) // Best effort symlinking, ignore error.
 	}
-
-	r.currentFile = f
-	os.Remove(filepath.Join(r.dirname, r.symlink))         // Remove symlink, if any, ignore error.
-	os.Symlink(fname, filepath.Join(r.dirname, r.symlink)) // Best effort symlinking, ignore error.
 
 	n, err = r.currentFile.Write(b)
-	r.bytesWritten = n
+	r.currentFileSize += n
 	return n, err
 }
 

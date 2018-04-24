@@ -19,6 +19,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Portions of this code originated in the standard library 'log' package.
+
 package log
 
 import (
@@ -84,7 +86,7 @@ func (l *Logger) Infof(format string, v ...interface{}) {
 // Warn logs to the WARN log. Arguments are handled in the manner of fmt.Println;
 // a newline is appended at the end.
 func (l *Logger) Warn(v ...interface{}) {
-	l.log(WarnMode, fmt.Sprint(v...))
+	l.log(WarnMode, fmt.Sprintln(v...))
 }
 
 // Warnf logs to the WARN log. Arguments are handled in the manner of fmt.Printf;
@@ -96,7 +98,7 @@ func (l *Logger) Warnf(format string, v ...interface{}) {
 // Error logs to the ERROR log. Arguments are handled in the manner of fmt.Println;
 // a newline is appended at the end.
 func (l *Logger) Error(v ...interface{}) {
-	l.log(ErrorMode, fmt.Sprint(v...))
+	l.log(ErrorMode, fmt.Sprintln(v...))
 }
 
 // Errorf logs to the ERROR log. Arguments are handled in the manner of fmt.Printf;
@@ -111,7 +113,7 @@ func (l *Logger) Errorf(format string, v ...interface{}) {
 // TODO(irfansharif): Including a stack trace of all running goroutines, then
 // calls os.Exit(255).
 func (l *Logger) Fatal(v ...interface{}) {
-	l.log(FatalMode, fmt.Sprint(v...))
+	l.log(FatalMode, fmt.Sprintln(v...))
 }
 
 // Fatalf logs to the FATAL log. Arguments are handled in the manner of fmt.Printf;
@@ -126,7 +128,7 @@ func (l *Logger) Fatalf(format string, v ...interface{}) {
 // Debug logs to the DEBUG log. Arguments are handled in the manner of fmt.Println;
 // a newline is appended at the end.
 func (l *Logger) Debug(v ...interface{}) {
-	l.log(DebugMode, fmt.Sprint(v...))
+	l.log(DebugMode, fmt.Sprintln(v...))
 }
 
 // Debugf logs to the DEBUG log. Arguments are handled in the manner of fmt.Printf;
@@ -157,13 +159,16 @@ func (l *Logger) log(lmode Mode, data string) {
 	}
 
 	var shouldLog bool
-	if gmode := GetGlobalLogMode(); (gmode & lmode) != DisabledMode {
-		// Log mode satisfies global mode.
-		shouldLog = true
-	} else if fmode, ok := GetFileLogMode(bfile); ok && (fmode&lmode) != DisabledMode {
+	if fmode, ok := GetFileLogMode(bfile); ok && (fmode&lmode) != DisabledMode {
+		// Log mode satisfies the specific file mode. Since file mode filtering
+		// is only used for overrides, we check for this first.
 		// Log mode satisfies specific file mode, and crucially, not the global
 		// mode. File mode filtering is only to be used for overrides, if global
 		// log mode is satisfied, we already capture it.
+		shouldLog = true
+	} else if gmode := GetGlobalLogMode(); !ok && (gmode&lmode) != DisabledMode {
+		// Log mode satisfies global mode, and crucially, there isn't
+		// a file specific override.
 		shouldLog = true
 	} else if (lmode & FatalMode) != DisabledMode {
 		// Logger.Fatal{,f} statements aren't filtered out.
@@ -251,7 +256,7 @@ func (l *Logger) header(lmode Mode, t time.Time, file string, line int) []byte {
 		*buf = append(*buf, file...)
 		*buf = append(*buf, ':')
 		itoa(buf, line, -1)
-		*buf = append(*buf, ": "...)
+		*buf = append(*buf, "] "...)
 	}
 	return b
 }

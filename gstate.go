@@ -36,16 +36,11 @@ type gstateT struct {
 
 var gstate gstateT
 
-// Need to initialize the atomics; to be used once during init time and for
-// tests.
-func resetgstate() {
+// Need to initialize the atomics; to be used once during init time.
+func init() {
 	gstate.gmode.Store(DefaultMode)
 	gstate.tracePointMu.m.Store(make(tracePointMap))
 	gstate.fileModeMu.m.Store(make(fileModeMap))
-}
-
-func init() {
-	resetgstate()
 }
 
 // SetGlobalLogMode sets the global log mode to the one specified. Logging
@@ -72,6 +67,24 @@ func SetTracePoint(tp string) {
 		mb[tp] = struct{}{} // Copy all data from the current object to the new one.
 	}
 	mb[tp] = struct{}{}             // Do the update that we need.
+	gstate.tracePointMu.m.Store(mb) // Atomically replace the current object with the new one.
+	// At this point all new readers start working with the new version.
+	// The old version will be garbage collected once the existing readers
+	// (if any) are done with it.
+	gstate.tracePointMu.Unlock()
+}
+
+// ResetTracePoint resets the provided tracepoint so that a backtraces are no
+// longer emitted when the specified logging statement is executed. See comment
+// for SetTracePoint for what a tracepoint is.
+func ResetTracePoint(tp string) {
+	gstate.tracePointMu.Lock()                         // Synchronize with other potential writers.
+	ma := gstate.tracePointMu.m.Load().(tracePointMap) // Load current value of the map.
+	mb := make(tracePointMap)                          // Create a new map.
+	for tp := range ma {
+		mb[tp] = struct{}{} // Copy all data from the current object to the new one.
+	}
+	delete(mb, tp)                  // Do the update that we need.
 	gstate.tracePointMu.m.Store(mb) // Atomically replace the current object with the new one.
 	// At this point all new readers start working with the new version.
 	// The old version will be garbage collected once the existing readers
@@ -108,4 +121,21 @@ func GetFileLogMode(fname string) (m Mode, ok bool) {
 	fmmap := gstate.fileModeMu.m.Load().(fileModeMap)
 	m, ok = fmmap[fname]
 	return m, ok
+}
+
+// ResetFileLogMode resets the log mode for the provided filename. Subsequent
+// logging statements within the file get filtered as per the global log mode.
+func ResetFileLogMode(fname string) {
+	gstate.fileModeMu.Lock()                       // Synchronize with other potential writers.
+	ma := gstate.fileModeMu.m.Load().(fileModeMap) // Load current value of the map.
+	mb := make(fileModeMap)                        // Create a new map.
+	for fname, m := range ma {
+		mb[fname] = m // Copy all data from the current object to the new one.
+	}
+	delete(mb, fname)             // Do the update that we need.
+	gstate.fileModeMu.m.Store(mb) // Atomically replace the current object with the new one.
+	// At this point all new readers start working with the new version.
+	// The old version will be garbage collected once the existing readers
+	// (if any) are done with it.
+	gstate.fileModeMu.Unlock()
 }

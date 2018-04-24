@@ -9,11 +9,9 @@ import (
 )
 
 func TestSetGetGlobalPCMode(t *testing.T) {
-	resetgstate()
-	defer func() { resetgstate() }()
-
 	tp := fmt.Sprintf("%s:%d", "t.go", 42)
 	SetTracePoint(tp)
+	defer ResetTracePoint(tp)
 	enabled := GetTracePoint(tp)
 	if !enabled {
 		t.Errorf("Expected tracepoint %s to be enabled", tp)
@@ -21,9 +19,6 @@ func TestSetGetGlobalPCMode(t *testing.T) {
 }
 
 func TestGetGlobalPCMode(t *testing.T) {
-	resetgstate()
-	defer func() { resetgstate() }()
-
 	tp := fmt.Sprintf("%s:%d", "t.go", 42)
 	enabled := GetTracePoint(tp)
 	if enabled {
@@ -32,10 +27,8 @@ func TestGetGlobalPCMode(t *testing.T) {
 }
 
 func TestInfoLog(t *testing.T) {
-	resetgstate()
-	defer func() { resetgstate() }()
-
 	SetGlobalLogMode(InfoMode)
+	defer SetGlobalLogMode(DefaultMode)
 
 	buffer := new(bytes.Buffer)
 	logger := New(Writer(buffer))
@@ -78,10 +71,8 @@ func TestInfoLog(t *testing.T) {
 }
 
 func TestDebugModeEnableDisable(t *testing.T) {
-	resetgstate()
-	defer func() { resetgstate() }()
-
-	SetGlobalLogMode(InfoMode | DebugMode)
+	SetGlobalLogMode(InfoMode)
+	defer SetGlobalLogMode(DefaultMode)
 
 	buffer := new(bytes.Buffer)
 	logger := New(Writer(buffer))
@@ -90,7 +81,7 @@ func TestDebugModeEnableDisable(t *testing.T) {
 		logger.Debugf("%t %d %s", true, 1, "debugf")
 		logger.Debugf("debugf")
 
-		regex := ""
+		regex := "^$"
 		match, err := regexp.Match(regex, buffer.Bytes())
 		if err != nil {
 			t.Error(err)
@@ -100,6 +91,7 @@ func TestDebugModeEnableDisable(t *testing.T) {
 		}
 		buffer.Reset()
 	}
+	SetGlobalLogMode(DebugMode)
 	{
 		logger.Debug("debug")
 		regex := "^D.*: debug"
@@ -115,10 +107,8 @@ func TestDebugModeEnableDisable(t *testing.T) {
 }
 
 func TestEnableTracePoint(t *testing.T) {
-	resetgstate()
-	defer func() { resetgstate() }()
-
 	SetGlobalLogMode(DisabledMode)
+	defer SetGlobalLogMode(DefaultMode)
 
 	// XXX(irfansharif): This test depends on the exact difference in line
 	// numbers between the call to callers and the logger.Info execution below.
