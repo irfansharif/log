@@ -149,7 +149,7 @@ func modeFromString(value string) (log.Mode, error) {
 			m = log.DisabledMode
 			break
 		default:
-			return m, errors.New(fmt.Sprintf("unrecognized mode: %s", m))
+			return m, errors.New(fmt.Sprintf("unrecognized mode: %v", m))
 		}
 	}
 	return m, nil
